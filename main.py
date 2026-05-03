@@ -14,7 +14,6 @@ from fastapi.staticfiles import StaticFiles
 
 from database import SessionLocal, engine
 from models import Base, Teacher
-from routers import auth, confirm, exam, teacher, violation
 
 app = FastAPI(
     title="HADIR Exam App",
