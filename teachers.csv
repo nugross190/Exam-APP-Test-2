@@ -11,8 +11,8 @@ nip,full_name,role,username,subject_name
 197709082014102002,"Hj. Yeni Rahmawati, S.E., S.Pd., M.Pd",teacher,yeni_rahmawati,Ekonomi
 197810272014112001,"Reni Renofa, S.Pd., M.Pd.",teacher,reni_renofa,Biologi
 198004102014111001,"Dedi Hartono, S.Pd.",teacher,dedi_hartono,Kimia
-198012172014092002,"Diah Sekarini, S.S., M.Pd",teacher,diah_sekarini_ss,Bahaasa Indonesia
-198012172014092002,"Diah Sekarini, S.S., M.Pd",teacher,diah_sekarini_ss,Bahaasa Indonesia Tingkat Lanjut
+198012172014092002,"Diah Sekarini, S.S., M.Pd",teacher,diah_sekarini_ss,Bahasa Indonesia
+198012172014092002,"Diah Sekarini, S.S., M.Pd",teacher,diah_sekarini_ss,Bahasa Indonesia Tingkat Lanjut
 196702232014091001,"Aas Suherman, S.P.",teacher,aas_suherman_sp,Prakarya dan Kewirausahaan
 197404272014091001,"Sopyan Abdillah, S.Pd., M.Pd.",teacher,sopyan_abdillah,Matematika
 197807282014091003,"Efinda Nurdiansah, S.Pd. M.Pd.",teacher,efinda_nurdiansah,Biologi
@@ -56,7 +56,7 @@ nip,full_name,role,username,subject_name
 -,"Asep Nugraha, S.Pd, Gr.",teacher,asep_nugraha_gr,Matematika Peminatan
 197501082024211003,"Purkonul Hakim, S.Pd.I",teacher,purkonul_hakim_spdi,Pend. Agama dan Budi Pekerti
 197501082024211003,"Purkonul Hakim, S.Pd.I",teacher,purkonul_hakim_spdi,Bahasa dan Sastra Arab
-197501082024211003,"Purkonul Hakim, S.Pd.I",teacher,purkonul_hakim_spdi,Seni Budaya  (Seni Rupa)
+197501082024211003,"Purkonul Hakim, S.Pd.I",teacher,purkonul_hakim_spdi,Seni Budaya (Seni Rupa)
 197804082024211004,"Ridwan Hartanto, S.Pd",teacher,ridwan_hartanto,Pendidikan Pancasila
 197804082024211004,"Ridwan Hartanto, S.Pd",teacher,ridwan_hartanto,Geografi
 197804082024211004,"Ridwan Hartanto, S.Pd",teacher,ridwan_hartanto,Bimbingan Konseling
@@ -78,7 +78,7 @@ nip,full_name,role,username,subject_name
 199003272025211127,"Asep Widarman, S.Pd.",teacher,asep_widarman,Ekonomi
 199407242025212154,"Nira Herdiani, S.Pd",teacher,nira_herdiani,Bahasa Inggris
 199407242025212154,"Nira Herdiani, S.Pd",teacher,nira_herdiani,Sastra Inggris
-199407242025212154,"Nira Herdiani, S.Pd",teacher,nira_herdiani,B.Inggris Tingkat Lanjut
+199407242025212154,"Nira Herdiani, S.Pd",teacher,nira_herdiani,Bahasa Inggris Tingkat Lanjut
 199208102025211144,"Imam Aditya Nugraha, S.Pd",teacher,imam_aditya_nugraha,Penjasorkes
 199208102025211144,"Imam Aditya Nugraha, S.Pd",teacher,imam_aditya_nugraha,Geografi
 199611132025212140,"Masniara Nurul Azmi, S.Pd",teacher,masniara_nurul_azmi,Bahasa Sunda
@@ -88,5 +88,5 @@ nip,full_name,role,username,subject_name
 199409252025212162,"Rifni Nurdieni, S.Kom.I., S.Pd.Gr",teacher,rifni_nurdieni_skomi_spdgr,Bimbingan Konseling
 199312152025212140,"Fenti Susilawati, S.Pd. Gr.",teacher,fenti_susilawati_gr,Bahasa Inggris
 199312152025212140,"Fenti Susilawati, S.Pd. Gr.",teacher,fenti_susilawati_gr,Sastra Inggris
-199312152025212140,"Fenti Susilawati, S.Pd. Gr.",teacher,fenti_susilawati_gr,B. Inggris Tingkat Lanjut
+199312152025212140,"Fenti Susilawati, S.Pd. Gr.",teacher,fenti_susilawati_gr,Bahasa Inggris Tingkat Lanjut
 --,"Fidya Datian Nurfadila, S.Pd",teacher,fidya_datian_nurfadila,Bahasa Sunda
