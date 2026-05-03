@@ -1,6 +1,9 @@
 # Database files
 *.db
 
+# Student rosters (PII — provide locally, do not commit)
+daftar_peserta_*.xlsx
+
 # Environment files
 .env
 .env.local

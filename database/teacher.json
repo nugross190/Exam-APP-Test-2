@@ -1,14 +1,1 @@
-[
-  {
-    "username": "admin",
-    "password": "admin123",
-    "full_name": "Administrator",
-    "role": "admin"
-  },
-  {
-    "username": "guru_matematika",
-    "password": "guru123",
-    "full_name": "Guru Matematika",
-    "role": "teacher"
-  }
-]
+[]
