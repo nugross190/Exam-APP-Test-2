@@ -1,0 +1,146 @@
+Here is the raw app specification reformatted into a readable, structured plain-text document. 
+
+### EXAM APP — BUILD SPECIFICATION[cite: 3]
+*Pseudocode package for Claude Code*[cite: 3]
+*SMAN 5 Garut | 847 students | Deadline: 3rd week May 2026*[cite: 3]
+
+---
+
+### 0. Source Files to Parse
+Three files must be parsed before any database seeding occurs[cite: 3]. All three are from last semester's exam, and the parser must read them in the following order[cite: 3]:
+
+*   **`daftar_peserta_kelas_XI_updated.xlsx`**[cite: 3]
+    *   **Target Sheet:** `daftar_hadir_kelas_XI_updated`[cite: 3].
+    *   **Extraction Details:** Pull columns A (row int), D (NISN), E (NIS), F (NAMA), G (L/P), and H (KELAS)[cite: 3]. Only extract rows where column A is an integer[cite: 3].
+    *   **Target Tables:** Student, Class[cite: 3].
+    *   **Known Issues:** 18 students are flagged for `nisn_invalid` or `nisn_dup`[cite: 3]. All 14 schedule slots for XI-A are currently placeholders[cite: 3].
+*   **`daftar_peserta_kelas_X_updated.xlsx`**[cite: 3]
+    *   **Target Sheet:** `daftar_hadir_kelas_X_updated`[cite: 3].
+    *   **Extraction Details:** Uses the same column mapping as Grade XI[cite: 3]. Ignore columns 10 and beyond, as subject columns contain VLOOKUP formulas[cite: 3].
+    *   **Target Tables:** Student, Class[cite: 3].
+    *   **Known Issues:** 12 students are flagged[cite: 3]. This includes 1 `nisn+nis_dup` (MUHAMAD YUDA ARROJAB in X-I), and multiple `nis_dup` errors in class X-L[cite: 3].
+*   **`schedule_sample.xlsx`**[cite: 3]
+    *   **Target Sheet:** Sheet1 only[cite: 3].
+    *   **Extraction Details:** Contains two grid blocks: rows 1-15 (XI) and rows 18-32 (X)[cite: 3]. Rows 1 and 18 are dates, rows 2 and 19 are timeslots, and rows 3+ and 20+ list the class per row with subjects per cell[cite: 3].
+    *   **Target Tables:** Subject, Exam, ClassSubject[cite: 3].
+    *   **Known Issues:** XI-A and X-A rows contain placeholders (Column1...Column16), which should be skipped with a warning emitted[cite: 3]. 26 unique subjects and 26 exam slots are successfully extracted from the remaining 22 classes[cite: 3].
+
+**Important Data Warnings:**
+*   XI-A and X-A currently have no schedule data[cite: 3]. The 71 students in these classes will have no exam assignments until the schedule file is corrected[cite: 3].
+*   The total student count is 847 (419 in Grade X and 428 in Grade XI)[cite: 3].
+*   There are 30 flagged students[cite: 3]. All rows must be inserted, with `flagged=true` set, so they surface in the admin UI[cite: 3].
+
+---
+
+### 1. Database Models (`models.py`)
+All 13 models must be created before writing any routes[cite: 3]. Run `alembic revision --autogenerate` afterward[cite: 3].
+
+**1.1 Identity Tables**[cite: 3]
+*   **Class:** `id` (UUID PK), `name` (string, unique, e.g., 'XI - A'), `grade` (string(2), 'X' or 'XI'), `homeroom_teacher_id` (FK to Teacher, nullable)[cite: 3].
+*   **Teacher:** `id`, `username` (unique), `password_hash`, `full_name`, `role` (string: 'teacher', 'admin', 'owner', or 'homeroom')[cite: 3].
+*   **Student:** `id`, `nisn` (string(10), indexed), `nis` (string(20), unique index), `name`, `gender` (string(1)), `class_id` (FK to Class), `username` (string, unique, equals NIS), `password_hash`, `data_confirmed` (boolean default False), `flagged` (boolean default False), `flag_reason` (string, nullable)[cite: 3].
+
+**1.2 Curriculum Tables**[cite: 3]
+*   **Subject:** `id`, `name` (string, unique), `teacher_id` (FK to Teacher, nullable)[cite: 3].
+*   **ClassSubject:** `id`, `class_id` (FK to Class), `subject_id` (FK to Subject), with a `UNIQUE` constraint on class_id and subject_id[cite: 3].
+
+**1.3 Exam Scheduling**[cite: 3]
+*   **Exam:** `id`, `subject_id` (FK to Subject), `title` (string), `duration_minutes` (integer default 90), `scheduled_at` (datetime), `time_end` (time), `status` (string: 'draft', 'scheduled', 'open', or 'closed'), `admin_confirmed` (boolean default False)[cite: 3].
+
+**1.4 Question Bank**[cite: 3]
+*   **Question:** `id`, `exam_id` (FK to Exam), `question_type` (string: 'pg', 'tf', or 'complex_mc'), `body` (text), `image_url` (string, nullable), `item_points` (float), `choices_count` (integer: 4 or 5)[cite: 3].
+*   **Choice:** `id`, `question_id` (FK to Question), `body` (text), `is_correct` (boolean), `weight` (float: calculated as 1/choices_count if correct, else 0.0)[cite: 3].
+
+**1.5 Exam Session**[cite: 3]
+*   **ExamSession:** `id`, `student_id` (FK to Student), `exam_id` (FK to Exam), `status` (string: 'pending', 'active', 'submitted', 'expelled', or 'panic'), `violation_count` (integer default 0), `locked_until` (datetime, nullable), `started_at`, `submitted_at`, `panic_at` (datetime, nullable), `question_order` (JSON shuffled list of question_ids)[cite: 3].
+*   **SessionViolation:** `id`, `session_id` (FK to ExamSession), `event_type` (string: 'tab_switch' or 'fullscreen_exit'), `occurred_at` (datetime)[cite: 3].
+*   **StudentAnswer:** `id`, `session_id` (FK to ExamSession), `question_id` (FK to Question), `score_earned` (float, nullable)[cite: 3].
+*   **AnswerChoice:** `id`, `student_answer_id` (FK to StudentAnswer), `choice_id` (FK to Choice)[cite: 3].
+*   **ExamResult:** `id`, `session_id` (FK to ExamSession, unique), `total_score` (float), `max_score` (float), `finalized_at` (datetime)[cite: 3].
+
+---
+
+### 2. Excel Parser (`parsers/excel.py`)
+Provides three public functions returning `ParseResult(data=[], warnings=[])`[cite: 3]. It must never raise on bad rows, but instead collect warnings and continue[cite: 3].
+
+*   **`parse_students(xi_path, x_path)`:** Opens the workbook in read-only mode and parses student details[cite: 3]. Checks if NISN is 10 characters long, and flags duplicates (`nisn_dup`, `nis_dup`) against sets of seen values[cite: 3].
+*   **`parse_schedule(schedule_path)`:** Locates block starts, aggregates dates and times, and links classes to subjects based on column index[cite: 3]. Skips missing rows and placeholders (e.g., 'column1')[cite: 3]. *Note: It converts Indonesian date strings into standard dates and fixes time formatting by replacing '.' with ':'*[cite: 3].
+*   **`derive_class_subjects(entries)`:** Returns a dictionary mapping classes to a set of their subjects[cite: 3].
+
+---
+
+### 3. Database Seed (`seed.py`)
+Run once per environment and designed to be idempotent[cite: 3]. Accepts CLI paths to the three spreadsheets and a `--dry-run` flag[cite: 3]. Execution order: classes/students -> subjects/exams -> class_subjects[cite: 3].
+
+*   **`seed_classes_and_students`:** Derives class names and grades, hashes passwords using bcrypt (defaulting to the last 6 digits of the NISN), and creates Student records[cite: 3].
+*   **`seed_subjects_and_exams`:** Finds the first-seen schedule slot for unique subjects to create Exam records default 90-minute durations[cite: 3].
+*   **`seed_class_subjects`:** Maps subjects to classes if the connection doesn't already exist[cite: 3].
+
+---
+
+### 4. Auth (`routers/auth.py`)
+*   **`POST /auth/student/login`:** Validates username (NIS) and bcrypt password (last 6 of NISN)[cite: 3]. Raises 401 on failure[cite: 3]. Returns an 8-hour JWT access token along with student details[cite: 3].
+*   **`POST /auth/teacher/login`:** Same validation pattern, pulling roles directly from the Teacher model[cite: 3].
+
+---
+
+### 5. Exam Engine (`routers/exam.py`)
+*   **`GET /exam/available`:** Returns scheduled exams filtered by the student's class where `admin_confirmed=True` and `status='open'`[cite: 3].
+*   **`POST /exam/{exam_id}/start`:** Blocks 'expelled' sessions (403) or active lockdowns (423)[cite: 3]. Creates an active `ExamSession` and shuffles the `question_order`[cite: 3].
+*   **`GET /exam/session/{session_id}/questions`:** Checks student ownership and time bounds[cite: 3]. Strips `is_correct` answers from the payload before returning questions to the client[cite: 3].
+*   **`POST /exam/session/{session_id}/answer`:** Upserts `StudentAnswer` and handles deleting/inserting `AnswerChoice` rows[cite: 3]. Does *not* score the answer here[cite: 3].
+*   **`POST /exam/session/{session_id}/submit`:** Updates status to 'submitted' and calls internal `score_session`[cite: 3].
+*   **`score_session` (internal):** Calculates weight (1/choices_count per correct choice)[cite: 3]. Wrong choices earn 0.0 with no penalties[cite: 3]. Logs data to `ExamResult`[cite: 3].
+
+---
+
+### 6. Violation and Lockdown (`routers/violation.py`)
+*   **Frontend Contract:** PWA requests fullscreen on load[cite: 3]. Posts violation triggers if document visibility is hidden or fullscreen is exited[cite: 3]. Displays lockout overlays[cite: 3].
+*   **`POST /exam/session/{session_id}/violation`:** Increments `violation_count`[cite: 3]. 1st violation locks test for 5 minutes; 2nd violation locks for 15 minutes; 3rd violation sets status to 'expelled' and alerts the homeroom teacher via an `ExpelledFlag`[cite: 3].
+*   **`POST /exam/session/{session_id}/panic`:** Sets status to 'panic' and outputs a 6-character safe exit code for the teacher[cite: 3].
+
+---
+
+### 7. Teacher Portal (`routers/teacher.py`)
+*   **`GET /teacher/exams`:** Returns exams assigned to the `current_teacher.id`[cite: 3].
+*   **`POST /teacher/exam/{exam_id}/question`:** Validates payloads ensuring 4-5 choices and at least 1 correct choice[cite: 3]. Calculates partial weights and creates records[cite: 3].
+*   **`PUT /teacher/question/{question_id}`:** Verifies ownership, updates the Question, and recreates Choices via DELETE+INSERT[cite: 3].
+*   **`POST /teacher/question/{question_id}/image`:** Accepts jpg/png uploads[cite: 3]. Saves to a Railway volume or R2 bucket (configured via env variables) and sets the `image_url`[cite: 3]. 
+
+---
+
+### 8. Admin Panel (`routers/admin.py`)
+*   **`POST /admin/exam/{exam_id}/confirm`:** Allows admins/owners to set `admin_confirmed = True` and open exams[cite: 3].
+*   **`GET /admin/exam/{exam_id}/monitor`:** Returns live tracking of active/submitted/expelled counts and homeroom flags[cite: 3].
+*   **`GET /admin/results/{exam_id}/export`:** Builds an Excel export detailing student scores (Sheet1) and class averages/pass rates (Sheet2)[cite: 3].
+*   **`POST /admin/import/...`:** Uploads the source excel files to trigger parsing and seeding, supporting `?dry_run=true`[cite: 3].
+
+---
+
+### 9. Data Confirmation (`routers/confirm.py`)
+Runs during the testing week (3rd week of May) so students can verify schedules[cite: 3].
+*   **`GET /confirm/my-subjects`:** Returns the subjects linked to the student's class[cite: 3].
+*   **`POST /confirm/flag-error`:** Creates a `DataFlag` with a note and un-confirms the student[cite: 3].
+*   **`POST /confirm/confirm`:** Sets the student's `data_confirmed` to True[cite: 3].
+*   **`GET /confirm/homeroom-summary`:** Returns confirmation statuses for all students inside the homeroom teacher's assigned class[cite: 3].
+
+---
+
+### 10. File Structure[cite: 3]
+*   **`main.py`:** FastAPI app, router includes, CORS[cite: 3].
+*   **`models.py`:** All 13 SQLAlchemy models[cite: 3].
+*   **`database.py`:** Engine, SessionLocal, get_db dependency[cite: 3].
+*   **`alembic/`:** Migrations[cite: 3].
+*   **`routers/`:** Contains routing modules (`auth.py`, `exam.py`, `violation.py`, `teacher.py`, `admin.py`, `confirm.py`)[cite: 3].
+*   **`parsers/excel.py`:** File extraction logic[cite: 3].
+*   **`seed.py`:** Database initialization script[cite: 3].
+*   **`static/`:** Frontend HTML templates[cite: 3].
+*   *Railway env vars required:* `DATABASE_URL`, `JWT_SECRET`, `OWNER_PIN`[cite: 3]. *Optional for prod:* `R2_ENDPOINT`, `R2_ACCESS_KEY`, `R2_SECRET_KEY`, `R2_BUCKET`[cite: 3].
+
+---
+
+### 11. Build Order (3 Weeks)[cite: 3]
+*   **Week 1 (May 5–9):** Build models, parsers, seeder, auth, and data confirmation[cite: 3]. Goal: Students can log in and view their correct subject list[cite: 3].
+*   **Week 2 (May 12–16):** Build the teacher question portal, exam engine, lockdown protocols, and admin portal[cite: 3]. Goal: Admin can open an exam and see live active sessions[cite: 3].
+*   **Week 3 (May 19–23):** Build Excel exports, run a mock phone exam, and execute load testing targeting 100 concurrent sessions without 5xx errors[cite: 3].
+*   **Development Warnings:** If Week 2 runs behind, the image uploads and view-toggle UI can be cut, but scoring and violations must remain[cite: 3]. XI-A and X-A schedule gaps must be corrected and re-imported before exam week[cite: 3].

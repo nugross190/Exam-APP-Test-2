@@ -155,41 +155,52 @@ def seed_classes_and_students(
 # ---------------------------------------------------------------------------
 
 def seed_subjects_and_exams(
-    schedule_entries: Iterable[ScheduleEntry], db: Session,
+    schedule_entries, db: Session
 ) -> dict:
     """Idempotent. One Exam per subject, scheduled at the first-seen slot."""
     entries = list(schedule_entries)
     stats = {"created_subjects": 0, "created_exams": 0, "skipped_exams": 0}
 
-    # 1. Subjects.
-    unique_subjects = {e.subject for e in entries}
-    for name in unique_subjects:
-        if db.query(Subject).filter_by(name=name).first():
-            continue
-        db.add(Subject(name=name))
-        stats["created_subjects"] += 1
-    db.flush()
+    # --- 1. Fetch available teachers ---
+    teachers = db.query(Teacher).filter(Teacher.role == "teacher").all()
+    teacher_count = len(teachers)
 
+    # --- 2. Create Subjects and assign Teachers to them ---
+    unique_subjects = {e.subject for e in entries}
+    for i, name in enumerate(unique_subjects):
+        subj = db.query(Subject).filter_by(name=name).first()
+        if not subj:
+            # Assign a teacher round-robin style so everyone gets a few subjects
+            assigned_teacher_id = teachers[i % teacher_count].id if teacher_count > 0 else None
+            
+            subj = Subject(name=name, teacher_id=assigned_teacher_id)
+            db.add(subj)
+            stats["created_subjects"] += 1
+    
+    db.flush() # Save subjects to the database so they get their IDs
+
+    # Build the dictionary mapping that your Exam loop needs
     subject_by_name = {s.name: s for s in db.query(Subject).all()}
 
-    # 2. First-seen slot per subject.
-    # Walk in input order so the first occurrence in the schedule grid
-    # is what wins. Spec doesn't specify ordering precisely, so we pick
-    # "iteration order of entries" which mirrors the row-major scan in
-    # parse_schedule.
-    subject_first_slot: dict[str, ScheduleEntry] = {}
-    for e in entries:
-        subject_first_slot.setdefault(e.subject, e)
+    # --- 3. RESTORED: Find the first slot for each subject ---
+    subject_first_slot = {}
+    for entry in entries:
+        if entry.subject not in subject_first_slot:
+            subject_first_slot[entry.subject] = entry
 
-    # 3. Exams.
+    # --- 4. Create Exams ---
     for name, slot in subject_first_slot.items():
         subj = subject_by_name[name]
+        
         # Idempotency: skip if an Exam already exists for this subject.
         existing = db.query(Exam).filter_by(subject_id=subj.id).first()
         if existing:
             stats["skipped_exams"] += 1
             continue
+            
+        from datetime import datetime # Just in case it's missing at the top
         scheduled_at = datetime.combine(slot.date, slot.time_start)
+        
         db.add(Exam(
             subject_id=subj.id,
             title=f"Ujian {name}",
