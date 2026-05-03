@@ -83,8 +83,6 @@ def parse_csv(path: Path) -> tuple[dict, list[tuple[str, str]]]:
         links: list[tuple[str, str]] = []
         for i, row in enumerate(reader, start=2):  # header is line 1
             nip = (row["nip"] or "").strip()
-            if not nip:
-                raise ValueError(f"line {i}: empty nip")
             entry = {
                 "full_name": (row["full_name"] or "").strip(),
                 "role":      (row["role"] or "").strip().lower(),
@@ -92,6 +90,11 @@ def parse_csv(path: Path) -> tuple[dict, list[tuple[str, str]]]:
             }
             if not all(entry.values()):
                 raise ValueError(f"line {i}: missing one of full_name/role/username")
+            # Auto-fill nip when blank or 'N/A' so honorary/non-PNS staff
+            # don't need a fake number invented in the CSV. Username is
+            # already unique, so __nonip_<username> stays unique too.
+            if not nip or nip.lower() in {"n/a", "na"}:
+                nip = f"__nonip_{entry['username']}"
             existing = teachers.get(nip)
             if existing is None:
                 teachers[nip] = entry
