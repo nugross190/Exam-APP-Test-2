@@ -72,7 +72,7 @@ import sys
 import httpx
 
 from database import SessionLocal
-from models import Class, Student
+from models import Class, ClassSubject, Student
 
 
 def _mark(ok: bool) -> str:
@@ -104,9 +104,16 @@ def pick_student() -> tuple[str, str, str, str] | None:
     step(2, "Pick a real seeded student from the DB")
     db = SessionLocal()
     try:
+        # Prefer a student whose class actually has subjects on the schedule
+        # (X-A and XI-A have no schedule, so picking from them gives a
+        # technically-valid login but an empty subject list).
+        classes_with_subjects = (
+            db.query(ClassSubject.class_id).distinct().subquery()
+        )
         s = (db.query(Student)
              .join(Student.class_)
-             .filter(Class.name.like("X - %"), Student.flagged == False)
+             .filter(Student.flagged == False,
+                     Class.id.in_(classes_with_subjects))
              .first())
         if s is None:
             _line("found a student", False,
