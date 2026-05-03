@@ -129,13 +129,27 @@ def import_csv(csv_path: Path) -> int:
 
     db = SessionLocal()
     created_creds: list[tuple[str, str]] = []  # (username, plaintext_password)
-    skipped_existing: list[str] = []
+    updated: list[tuple[str, list[str]]] = []  # (username, [changed_fields])
+    unchanged: list[str] = []
     nip_to_teacher_id: dict[str, str] = {}
     try:
         for nip, t in teachers.items():
             existing = db.query(Teacher).filter_by(username=t["username"]).first()
             if existing is not None:
-                skipped_existing.append(t["username"])
+                # Update mutable fields if the CSV disagrees with the DB.
+                # Password is intentionally NOT touched — operators rotate
+                # passwords through a separate flow.
+                changes: list[str] = []
+                if existing.full_name != t["full_name"]:
+                    changes.append(f"full_name: {existing.full_name!r}->{t['full_name']!r}")
+                    existing.full_name = t["full_name"]
+                if existing.role != t["role"]:
+                    changes.append(f"role: {existing.role!r}->{t['role']!r}")
+                    existing.role = t["role"]
+                if changes:
+                    updated.append((t["username"], changes))
+                else:
+                    unchanged.append(t["username"])
                 nip_to_teacher_id[nip] = existing.id
                 continue
             pw = _gen_password()
@@ -168,9 +182,15 @@ def import_csv(csv_path: Path) -> int:
     finally:
         db.close()
 
-    print(f"\nCreated {len(created_creds)} teachers, "
-          f"skipped {len(skipped_existing)} (username already existed).")
-    print(f"Linked {linked} subject assignments.")
+    print(f"\nCreated:   {len(created_creds)} teachers")
+    print(f"Updated:   {len(updated)} teachers (full_name/role differed)")
+    print(f"Unchanged: {len(unchanged)} teachers (already up to date)")
+    print(f"Linked:    {linked} subject assignments")
+    if updated:
+        print("\nUpdates:")
+        for u, changes in updated:
+            for c in changes:
+                print(f"  {u}: {c}")
     if missing_subjects:
         print(f"\nWARNING: {len(missing_subjects)} subject names not found in DB "
               f"(check spelling against seeded Subject.name):")
