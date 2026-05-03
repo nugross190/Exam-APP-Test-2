@@ -1,4 +1,3 @@
-```
 # Database files
 *.db
 
@@ -47,4 +46,3 @@ __pycache__/
 *$py.class
 *.so
 .Python
-```
