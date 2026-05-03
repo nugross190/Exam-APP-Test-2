@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-
+from routers import auth, confirm, exam, teacher, violation, admin
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -82,14 +82,12 @@ _upload_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=str(_upload_dir)), name="uploads")
 
 # As you build more, uncomment as you go:
-# app.include_router(admin.router)
+app.include_router(admin.router)
 
 
-@app.get("/")
-def root():
-    return {"app": "hadir-exam", "version": "0.1.0"}
 
 
 @app.get("/health")
 def health():
     return {"status": "ok"}
+app.mount("/", StaticFiles(directory="static", html=True), name="static")
