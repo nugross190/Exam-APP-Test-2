@@ -6,6 +6,7 @@ Spec §3. Run order: seed_classes_and_students → seed_subjects_and_exams
 Usage:
   python seed.py --xi <xi_path> --x <x_path> --schedule <sched_path>
   python seed.py ... --dry-run   # parse only, no DB writes
+  python seed.py --teachers      # seed teachers from database/teacher.json
 
 Flagged students per spec: insert all, set flagged=True, surface in admin
 UI. Per project owner decision (2026-04-28): for nis_dup rows we suffix
@@ -15,8 +16,10 @@ in until the kurikulum team fixes the source data. Same for username.
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from datetime import datetime
+from pathlib import Path
 from typing import Iterable
 
 import bcrypt
@@ -27,7 +30,7 @@ from sqlalchemy.orm import Session
 sys.path.insert(0, ".")
 from database import SessionLocal, engine
 from models import (
-    Base, Class, ClassSubject, Exam, Student, Subject,
+    Base, Class, ClassSubject, Exam, Student, Subject, Teacher,
 )
 from parsers.excel import (
     StudentRow, ScheduleEntry,
@@ -239,20 +242,92 @@ def seed_class_subjects(
 
 
 # ---------------------------------------------------------------------------
+# §3.4  seed_teachers
+# ---------------------------------------------------------------------------
+
+def seed_teachers(db: Session, teacher_json_path: str) -> dict:
+    """Idempotent. Seed teachers from a JSON file.
+    
+    JSON format:
+    [
+      {
+        "username": "admin",
+        "password": "plain_password",
+        "full_name": "Administrator",
+        "role": "admin"
+      },
+      ...
+    ]
+    """
+    stats = {"created_teachers": 0, "skipped": 0}
+    
+    path = Path(teacher_json_path)
+    if not path.exists():
+        raise FileNotFoundError(f"Teacher JSON file not found: {path}")
+    
+    with open(path, "r", encoding="utf-8") as f:
+        teachers_data = json.load(f)
+    
+    for t in teachers_data:
+        existing = db.query(Teacher).filter_by(username=t["username"]).first()
+        if existing:
+            stats["skipped"] += 1
+            continue
+        
+        db.add(Teacher(
+            username=t["username"],
+            password_hash=_hash_password(t["password"]),
+            full_name=t["full_name"],
+            role=t.get("role", "teacher"),
+        ))
+        stats["created_teachers"] += 1
+    
+    db.flush()
+    return stats
+
+
+# ---------------------------------------------------------------------------
 # CLI entrypoint
 # ---------------------------------------------------------------------------
 
 def main():
     ap = argparse.ArgumentParser(description="Seed HADIR Exam App database.")
-    ap.add_argument("--xi", required=True, help="Path to grade XI roster xlsx")
-    ap.add_argument("--x", required=True, help="Path to grade X roster xlsx")
-    ap.add_argument("--schedule", required=True, help="Path to schedule xlsx")
+    ap.add_argument("--xi", help="Path to grade XI roster xlsx")
+    ap.add_argument("--x", help="Path to grade X roster xlsx")
+    ap.add_argument("--schedule", help="Path to schedule xlsx")
+    ap.add_argument("--teachers", action="store_true",
+                    help="Seed teachers from database/teacher.json")
     ap.add_argument("--dry-run", action="store_true",
                     help="Parse only, print summary, no DB writes")
     ap.add_argument("--create-tables", action="store_true",
                     help="Run Base.metadata.create_all before seeding "
                          "(use only when alembic is not in play)")
     args = ap.parse_args()
+    
+    # If --teachers flag is set, seed teachers and exit
+    if args.teachers:
+        if args.create_tables:
+            print("\n== Creating tables (Base.metadata.create_all) ==")
+            Base.metadata.create_all(bind=engine)
+        
+        db = SessionLocal()
+        try:
+            print("\n== seed_teachers ==")
+            teacher_json = Path(__file__).parent / "database" / "teacher.json"
+            stats = seed_teachers(db, str(teacher_json))
+            print(f"  {stats}")
+            db.commit()
+            print("\n== Teachers seeded. ==")
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
+        return
+    
+    # Require student/schedule args for the main seeding flow
+    if not (args.xi and args.x and args.schedule):
+        ap.error("--xi, --x, and --schedule are required unless using --teachers")
 
     print("== Parsing files ==")
     students_result = parse_students(args.xi, args.x)
